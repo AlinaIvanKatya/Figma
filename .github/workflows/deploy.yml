@@ -1,0 +1,65 @@
+# GitHub Pages для React-проекта mini-figma
+# Срабатывает на каждый push в ветку main, собирает приложение и публикует
+# папку dist через официальный механизм GitHub Actions для Pages.
+
+name: Deploy to GitHub Pages
+
+on:
+  # Запуск при каждом push в main
+  push:
+    branches: [main]
+  # Возможность запустить вручную со вкладки Actions
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Запускается только один workflow-ран одновременно
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mini-figma/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mini-figma
+        run: npm ci
+
+      - name: Build
+        working-directory: mini-figma
+        run: npm run build
+
+      # Подготовка метаданных (github-pages) для дальнейшего деплоя
+      - name: Setup Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          # Собранный сайт — это папка dist внутри mini-figma
+          path: mini-figma/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
