@@ -22,7 +22,31 @@
       padding: 24px;
     }
 
+    .emoji {
+      position: fixed;
+      z-index: 0;
+      font-size: 42px;
+      line-height: 1;
+      user-select: none;
+      pointer-events: none;
+      opacity: 0.55;
+      animation: floaty 6s ease-in-out infinite;
+      text-shadow: 0 4px 10px rgba(120, 60, 10, 0.25);
+    }
+
+    @keyframes floaty {
+      0%,
+      100% {
+        transform: translateY(0) rotate(-4deg);
+      }
+      50% {
+        transform: translateY(-16px) rotate(5deg);
+      }
+    }
+
     main {
+      position: relative;
+      z-index: 1;
       max-width: 560px;
       background: #fff;
       border-radius: 12px;
@@ -47,6 +71,14 @@
   </style>
 </head>
 <body>
+  <span class="emoji" style="top:8%; left:6%;">🌅</span>
+  <span class="emoji" style="top:14%; right:10%;">🍊</span>
+  <span class="emoji" style="top:5%; left:42%;">🧡</span>
+  <span class="emoji" style="bottom:18%; left:12%;">☀️</span>
+  <span class="emoji" style="bottom:8%; right:8%;">🌇</span>
+  <span class="emoji" style="bottom:30%; right:22%;">✨</span>
+  <span class="emoji" style="top:30%; left:5%;">🍂</span>
+  <span class="emoji" style="top:44%; right:5%;">🔥</span>
   <main>
     <h1>Привет, я <span>AlinaIvanKatya</span> 😊</h1>
     <p>
