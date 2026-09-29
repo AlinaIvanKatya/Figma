@@ -73,6 +73,11 @@ export function useShapes(activeTool: Tool) {
   const historyFuture = useRef<Shape[][]>([]);
   // Зеркала для устойчивости к батчингу событий.
   const draftRef = useRef<Shape | null>(null);
+  /**
+   * Точка, с которой начали рисовать. Живёт отдельно от черновика: у черновика
+   * x/y — уже сдвинутый к минимуму угол, использовать его как якорь нельзя.
+   */
+  const drawStartRef = useRef<Point | null>(null);
   const moveRef = useRef<{ id: string; pointer: Point; originX: number; originY: number } | null>(null);
   /** Снимок списка в момент начала перетаскивания (для одного шага истории). */
   const moveSnapshotRef = useRef<Shape[] | null>(null);
@@ -135,6 +140,7 @@ export function useShapes(activeTool: Tool) {
         selected: false,
       };
       draftRef.current = next;
+      drawStartRef.current = start;
       setDraft(next);
     },
     [drawnShapeType, selectShape],
@@ -143,8 +149,11 @@ export function useShapes(activeTool: Tool) {
   /** Тянем: пересчитываем прямоугольник черновика по текущей точке курсора. */
   const updateDraw = useCallback((current: Point) => {
     const prev = draftRef.current;
-    if (!prev) return;
-    const next: Shape = { ...prev, ...normalizeRect(prev, current) };
+    const start = drawStartRef.current;
+    if (!prev || !start) return;
+    // Прямоугольник всегда считается от исходной точки старта: у черновика
+    // x/y уже сдвинуты к минимуму, нормализация от него увела бы фигуру.
+    const next: Shape = { ...prev, ...normalizeRect(start, current) };
     draftRef.current = next;
     setDraft(next);
   }, []);
@@ -154,6 +163,7 @@ export function useShapes(activeTool: Tool) {
     const current = draftRef.current;
     if (!current) return;
     draftRef.current = null;
+    drawStartRef.current = null;
     setDraft(null);
     if (current.width < 2 || current.height < 2) return; // просто клик — ничего не создаём
     const id = createId();
@@ -209,6 +219,7 @@ export function useShapes(activeTool: Tool) {
   /** Применяет снимок из истории и нормализует выделение. */
   const applyHistory = useCallback((target: Shape[]) => {
     draftRef.current = null;
+    drawStartRef.current = null;
     setDraft(null);
     shapesRef.current = target;
     setShapes(target);
