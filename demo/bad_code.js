@@ -6,8 +6,12 @@
  * Реальных ключей здесь нет — токен выдуманный, только для демонстрации.
  */
 
-/* TODO: убрать из кода, читать из переменной окружения */
-const API_TOKEN = "fake-token-DEMO-ONLY-0000000000000000";
+/**
+ * Токен приходит из переменной окружения, в коде секретов нет.
+ * Значение-заглушка лежит в demo/.env.example, реальный — в demo/.env (в git не попадает).
+ * Запуск с токеном: node --env-file=demo/.env demo/bad_code.js
+ */
+const API_TOKEN = process.env.API_TOKEN;
 const API_URL = "https://api.example.com/v1/charge";
 
 /** Итог по оплате картой: скидка 10% и налог 20% поверх. */
