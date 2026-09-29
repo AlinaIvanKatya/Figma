@@ -3,6 +3,9 @@ node_modules/
 dist/
 *.log
 
+# Секреты (реальные значения, .env.example коммитится)
+.env
+
 # Редакторы и ОС
 .vscode/
 .idea/
