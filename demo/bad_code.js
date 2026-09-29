@@ -18,24 +18,21 @@ const API_URL = "https://api.example.com/v1/charge";
 const CARD_DISCOUNT_RATE = 0.1;
 const CASH_DISCOUNT_RATE = 0.15;
 const TAX_RATE = 0.2;
+/** Способ оплаты без налога. */
+const NO_TAX = 0;
 /** Деньги округляем до копеек: результат целых центов. */
 const MONEY_SCALE = 100;
 /** Таймаут запроса к платёжному API, мс. */
 const REQUEST_TIMEOUT_MS = 3000;
 
-/** Итог по оплате картой: скидка 10% и налог 20% поверх. */
-function calcTotalCard(price, qty) {
+/**
+ * Итоговая цена заказа. Единственное место в проекте, где считается сумма:
+ * ставка скидки и налог приходят параметрами, а не зашиты в код.
+ */
+function calcTotal(price, qty, discountRate, taxRate) {
   const subtotal = price * qty;
-  const discount = subtotal * CARD_DISCOUNT_RATE;
-  const total = (subtotal - discount) * (1 + TAX_RATE);
-  return Math.round(total * MONEY_SCALE) / MONEY_SCALE;
-}
-
-/** Итог по оплате наличными: скидка 15% и налога нет. Отличается от карты только числами. */
-function calcTotalCash(price, qty) {
-  const subtotal = price * qty;
-  const discount = subtotal * CASH_DISCOUNT_RATE;
-  const total = subtotal - discount;
+  const discounted = subtotal * (1 - discountRate);
+  const total = discounted * (1 + taxRate);
   return Math.round(total * MONEY_SCALE) / MONEY_SCALE;
 }
 
@@ -60,7 +57,7 @@ async function chargeCard(price, qty) {
 // Демо-вызовы: печатаем результат, чтобы сравнить поведение до и после рефакторинга.
 const price = 1250;
 const qty = 3;
-console.log("Картой:", calcTotalCard(price, qty));
-console.log("Наличными:", calcTotalCash(price, qty));
+console.log("Картой:", calcTotal(price, qty, CARD_DISCOUNT_RATE, TAX_RATE));
+console.log("Наличными:", calcTotal(price, qty, CASH_DISCOUNT_RATE, NO_TAX));
 
-module.exports = { calcTotalCard, calcTotalCash, chargeCard };
+module.exports = { calcTotal, chargeCard };
