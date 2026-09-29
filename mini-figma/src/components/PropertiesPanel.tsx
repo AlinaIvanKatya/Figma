@@ -22,7 +22,8 @@ function Row({ label, value }: { label: string; value: string }) {
  */
 export default function PropertiesPanel({ shape, onChangeFill }: PropertiesPanelProps) {
   return (
-    <aside className="absolute bottom-3 right-3 top-3 z-10 flex w-64 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white/95 shadow-lg backdrop-blur">
+    /* top-3 + h-72 + gap: начинаемся ниже Layers, чтобы панели не накладывались. */
+    <aside className="absolute bottom-3 right-3 top-[300px] z-10 flex w-64 flex-col overflow-hidden rounded-xl border border-gray-200 bg-white/95 shadow-lg backdrop-blur">
       <header className="border-b border-gray-100 px-4 py-3 text-sm font-semibold text-gray-700">
         Properties
       </header>
