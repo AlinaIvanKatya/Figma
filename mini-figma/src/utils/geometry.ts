@@ -14,14 +14,6 @@ export function screenToWorld(screenX: number, screenY: number, viewport: Viewpo
   };
 }
 
-/** Мировые координаты -> экранные px. */
-export function worldToScreen(world: Point, viewport: Viewport): Point {
-  return {
-    x: world.x * viewport.zoom + viewport.x,
-    y: world.y * viewport.zoom + viewport.y,
-  };
-}
-
 /**
  * Прямоугольник перетаскивания: нормализует пару точек (начало, курсор)
  * в корректный прямоугольник — можно рисовать в любую сторону (вверх/влево).

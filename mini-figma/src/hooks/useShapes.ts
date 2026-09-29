@@ -1,17 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../constants/colors';
 import { TOOLS } from '../constants/tools';
-import type { Point, Shape, ShapeType, Tool } from '../types/shape';
+import type { Point, Shape, Tool } from '../types/shape';
 import { normalizeRect } from '../utils/geometry';
-
-/** Параметры для создания новой фигуры. */
-export interface NewShapeOptions {
-  type: ShapeType;
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
 
 /** Идентификатор «черновика» — фигуры, которая рисуется прямо сейчас. */
 const DRAFT_ID = 'draft';
@@ -110,39 +101,11 @@ export function useShapes(activeTool: Tool) {
     setShapes(shapesRef.current);
   }, []);
 
-  const addShape = useCallback(
-    (options: NewShapeOptions): string => {
-      const id = createId();
-      const shape: Shape = {
-        id,
-        ...options,
-        fill: DEFAULT_FILL[options.type],
-        stroke: DEFAULT_STROKE[options.type],
-        strokeWidth: 1.5,
-        rotation: 0,
-        selected: false,
-      };
-      pushHistory();
-      commitShapes([...shapesRef.current, shape]);
-      selectShape(id); // выделение — не часть истории
-      return id;
-    },
-    [pushHistory, commitShapes, selectShape],
-  );
-
   const updateShape = useCallback(
     (id: string, patch: Partial<Omit<Shape, 'id'>>) => {
+      if (!shapesRef.current.some((shape) => shape.id === id)) return; // нечего менять — в историю не пишем
       pushHistory();
       commitShapes(shapesRef.current.map((shape) => (shape.id === id ? { ...shape, ...patch } : shape)));
-    },
-    [pushHistory, commitShapes],
-  );
-
-  const removeShape = useCallback(
-    (id: string) => {
-      pushHistory();
-      commitShapes(shapesRef.current.filter((shape) => shape.id !== id));
-      setSelectedId((prev) => (prev === id ? null : prev));
     },
     [pushHistory, commitShapes],
   );
@@ -272,10 +235,8 @@ export function useShapes(activeTool: Tool) {
     selectedShape,
     draft,
     movingId,
-    addShape,
     updateShape,
     selectShape,
-    removeShape,
     startDraw,
     updateDraw,
     finishDraw,
