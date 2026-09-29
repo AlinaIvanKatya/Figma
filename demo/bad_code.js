@@ -14,20 +14,29 @@
 const API_TOKEN = process.env.API_TOKEN;
 const API_URL = "https://api.example.com/v1/charge";
 
+/* Правила тарификации. Меняются в одном месте, а не по всему файлу. */
+const CARD_DISCOUNT_RATE = 0.1;
+const CASH_DISCOUNT_RATE = 0.15;
+const TAX_RATE = 0.2;
+/** Деньги округляем до копеек: результат целых центов. */
+const MONEY_SCALE = 100;
+/** Таймаут запроса к платёжному API, мс. */
+const REQUEST_TIMEOUT_MS = 3000;
+
 /** Итог по оплате картой: скидка 10% и налог 20% поверх. */
 function calcTotalCard(price, qty) {
   const subtotal = price * qty;
-  const discount = subtotal * 0.1;
-  const total = (subtotal - discount) * 1.2;
-  return Math.round(total * 100) / 100;
+  const discount = subtotal * CARD_DISCOUNT_RATE;
+  const total = (subtotal - discount) * (1 + TAX_RATE);
+  return Math.round(total * MONEY_SCALE) / MONEY_SCALE;
 }
 
 /** Итог по оплате наличными: скидка 15% и налога нет. Отличается от карты только числами. */
 function calcTotalCash(price, qty) {
   const subtotal = price * qty;
-  const discount = subtotal * 0.15;
+  const discount = subtotal * CASH_DISCOUNT_RATE;
   const total = subtotal - discount;
-  return Math.round(total * 100) / 100;
+  return Math.round(total * MONEY_SCALE) / MONEY_SCALE;
 }
 
 /** Старая версия расчёта НДС. На неё больше не перешли, вызовов в проекте нет. */
@@ -43,7 +52,7 @@ async function chargeCard(price, qty) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({ amount: price, quantity: qty }),
-    signal: AbortSignal.timeout(3000),
+    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
   return res.json();
 }
