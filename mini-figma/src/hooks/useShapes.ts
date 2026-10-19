@@ -2,7 +2,8 @@ import { useCallback, useMemo, useRef, useState } from 'react';
 import { DEFAULT_FILL, DEFAULT_STROKE } from '../constants/colors';
 import { TOOLS } from '../constants/tools';
 import type { Point, Shape, Tool } from '../types/shape';
-import { normalizeRect } from '../utils/geometry';
+import { normalizeRect, resizeRect } from '../utils/geometry';
+import type { ResizeHandle, ResizeModifiers } from '../utils/geometry';
 
 /** Идентификатор «черновика» — фигуры, которая рисуется прямо сейчас. */
 const DRAFT_ID = 'draft';
@@ -15,6 +16,35 @@ function createId(): string {
     return crypto.randomUUID();
   }
   return `shape-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
+}
+
+/** Мировая точка маркера рамки выделения на заданном прямоугольнике. */
+function handleWorldPoint(
+  handle: ResizeHandle,
+  rect: Pick<Shape, 'x' | 'y' | 'width' | 'height'>,
+): Point {
+  const right = rect.x + rect.width;
+  const bottom = rect.y + rect.height;
+  const midX = rect.x + rect.width / 2;
+  const midY = rect.y + rect.height / 2;
+  switch (handle) {
+    case 'nw':
+      return { x: rect.x, y: rect.y };
+    case 'n':
+      return { x: midX, y: rect.y };
+    case 'ne':
+      return { x: right, y: rect.y };
+    case 'e':
+      return { x: right, y: midY };
+    case 'se':
+      return { x: right, y: bottom };
+    case 's':
+      return { x: midX, y: bottom };
+    case 'sw':
+      return { x: rect.x, y: bottom };
+    case 'w':
+      return { x: rect.x, y: midY };
+  }
 }
 
 // Пара эталонных слоёв — сразу видно, что зум/панорама и рендер работают.
@@ -58,7 +88,8 @@ const INITIAL_SHAPES: Shape[] = [
  * История: каждый шаг — массив фигур до действия (снимок в ref —
  * массивы иммутабельны, ссылка на старый массив остаётся «как было»).
  * Одно логическое действие = один шаг: создание фигуры, смена цвета,
- * удаление, одно перетаскивание целиком. Выделение в историю не входит.
+ * удаление, одно перетаскивание целиком, один ресайз целиком. Выделение
+ * в историю не входит.
  */
 export function useShapes(activeTool: Tool) {
   const [shapes, setShapes] = useState<Shape[]>(INITIAL_SHAPES);
@@ -81,6 +112,13 @@ export function useShapes(activeTool: Tool) {
   const moveRef = useRef<{ id: string; pointer: Point; originX: number; originY: number } | null>(null);
   /** Снимок списка в момент начала перетаскивания (для одного шага истории). */
   const moveSnapshotRef = useRef<Shape[] | null>(null);
+  /** Жест ресайза: маркер, исходный прямоугольник и точка старта курсора. */
+  const resizeRef =
+    useRef<{ id: string; handle: ResizeHandle; origin: Pick<Shape, 'x' | 'y' | 'width' | 'height'>; start: Point } | null>(
+      null,
+    );
+  /** Снимок списка в момент начала ресайза (для одного шага истории). */
+  const resizeSnapshotRef = useRef<Shape[] | null>(null);
 
   const selectedShape = shapes.find((shape) => shape.id === selectedId) ?? null;
 
@@ -214,13 +252,85 @@ export function useShapes(activeTool: Tool) {
     setMovingId(null);
   }, []);
 
+  // --- Ресайз выделенной фигуры за маркер ---
+
+  /** Начало ресайза: запоминаем маркер, исходный прямоугольник и точку старта курсора. */
+  const startResize = useCallback((id: string, handle: ResizeHandle, worldPoint: Point) => {
+    const shape = shapesRef.current.find((s) => s.id === id);
+    if (!shape) return;
+    // Повёрнутую фигуру не ресайзим: resizeRect считает в мировых осях, а
+    // маркеры живут внутри повёрнутого фрейма (transform в Shape.tsx) —
+    // математика «срезала» бы фигуру. Поле rotation сейчас никто не записывает,
+    // но честный отказ лучше тихой порчи.
+    if (shape.rotation !== 0) return;
+    resizeSnapshotRef.current = shapesRef.current; // иммутабельный массив = «как было»
+    resizeRef.current = {
+      id,
+      handle,
+      origin: { x: shape.x, y: shape.y, width: shape.width, height: shape.height },
+      start: worldPoint,
+    };
+  }, []);
+
+  /** Тянем маркер: дельта курсора от старта (в мировых единицах) двигает сторону, без истории. */
+  const updateResize = useCallback(
+    (worldPoint: Point, modifiers: ResizeModifiers) => {
+      const resize = resizeRef.current;
+      if (!resize) return;
+      const dx = worldPoint.x - resize.start.x;
+      const dy = worldPoint.y - resize.start.y;
+      const handlePoint = handleWorldPoint(resize.handle, resize.origin);
+      const rect = resizeRect(
+        resize.origin,
+        resize.handle,
+        { x: handlePoint.x + dx, y: handlePoint.y + dy },
+        modifiers,
+      );
+      commitShapes(shapesRef.current.map((s) => (s.id === resize.id ? { ...s, ...rect } : s)));
+    },
+    [commitShapes],
+  );
+
+  /** Конец ресайза: если размер реально изменился — один шаг истории. */
+  const endResize = useCallback(() => {
+    const resize = resizeRef.current;
+    if (resize && resizeSnapshotRef.current) {
+      const shape = shapesRef.current.find((s) => s.id === resize.id);
+      const resized = Boolean(
+        shape &&
+          (shape.x !== resize.origin.x ||
+            shape.y !== resize.origin.y ||
+            shape.width !== resize.origin.width ||
+            shape.height !== resize.origin.height),
+      );
+      if (resized) {
+        // В историю — состояние ДО ресайза: временно возвращаем снимок,
+        // коммитим его через pushHistory и снова коммитим итоговый список.
+        const finalShapes = shapesRef.current;
+        commitShapes(resizeSnapshotRef.current);
+        pushHistory();
+        commitShapes(finalShapes);
+      }
+    }
+    resizeSnapshotRef.current = null;
+    resizeRef.current = null;
+  }, [commitShapes, pushHistory]);
+
   // --- История (Undo / Redo) ---
 
   /** Применяет снимок из истории и нормализует выделение. */
   const applyHistory = useCallback((target: Shape[]) => {
+    // Прерываем незавершённые жесты: иначе moveRef/resizeRef останутся со
+    // старыми координатами, а endMove/endResize сравнит уже откаченное
+    // состояние с дожестовым и запушит неверный снимок.
     draftRef.current = null;
     drawStartRef.current = null;
+    moveRef.current = null;
+    moveSnapshotRef.current = null;
+    resizeRef.current = null;
+    resizeSnapshotRef.current = null;
     setDraft(null);
+    setMovingId(null);
     shapesRef.current = target;
     setShapes(target);
     setSelectedId((current) => (target.some((s) => s.id === current) ? current : null));
@@ -254,6 +364,9 @@ export function useShapes(activeTool: Tool) {
     startMove,
     updateMove,
     endMove,
+    startResize,
+    updateResize,
+    endResize,
     undo,
     redo,
   };

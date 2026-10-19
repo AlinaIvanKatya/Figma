@@ -1,5 +1,6 @@
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react';
 import type { Shape } from '../types/shape';
+import type { ResizeHandle } from '../utils/geometry';
 
 interface ShapeViewProps {
   shape: Shape;
@@ -12,6 +13,8 @@ interface ShapeViewProps {
   onSelect?: () => void;
   /** Начало перетаскивания фигуры (мировые координаты посчитает Canvas). */
   onDragStart?: (event: ReactPointerEvent<SVGSVGElement>) => void;
+  /** Начало ресайза за маркер (мировые координаты посчитает Canvas). */
+  onResizeStart?: (event: ReactPointerEvent<SVGElement>, handle: ResizeHandle) => void;
 }
 
 /** Отступ рамки выделения от фигуры, мировые единицы. */
@@ -24,19 +27,19 @@ const HANDLE_SIZE = 10;
  * Позиции маркеров рамки выделения относительно левого верхнего угла
  * фигуры (локальные координаты svg): 4 угла + 4 середины сторон.
  */
-function selectionHandles(shape: Shape): Array<{ x: number; y: number }> {
+function selectionHandles(shape: Shape): Array<{ x: number; y: number; handle: ResizeHandle }> {
   const p = SELECTION_PADDING;
   const w = shape.width;
   const h = shape.height;
   return [
-    { x: -p, y: -p }, // top-left
-    { x: w / 2, y: -p }, // top
-    { x: w + p, y: -p }, // top-right
-    { x: w + p, y: h / 2 }, // right
-    { x: w + p, y: h + p }, // bottom-right
-    { x: w / 2, y: h + p }, // bottom
-    { x: -p, y: h + p }, // bottom-left
-    { x: -p, y: h / 2 }, // left
+    { x: -p, y: -p, handle: 'nw' },
+    { x: w / 2, y: -p, handle: 'n' },
+    { x: w + p, y: -p, handle: 'ne' },
+    { x: w + p, y: h / 2, handle: 'e' },
+    { x: w + p, y: h + p, handle: 'se' },
+    { x: w / 2, y: h + p, handle: 's' },
+    { x: -p, y: h + p, handle: 'sw' },
+    { x: -p, y: h / 2, handle: 'w' },
   ];
 }
 
@@ -48,7 +51,7 @@ function selectionHandles(shape: Shape): Array<{ x: number; y: number }> {
  * но их экранный размер не зависит от зума (маркер: size = HANDLE_SIZE/zoom
  * в мировых единицах — на экране всегда HANDLE_SIZE px; рамка: non-scaling-stroke).
  */
-export default function ShapeView({ shape, zoom, onSelect, onDragStart }: ShapeViewProps) {
+export default function ShapeView({ shape, zoom, onSelect, onDragStart, onResizeStart }: ShapeViewProps) {
   const style: CSSProperties = {
     position: 'absolute',
     left: shape.x,
@@ -109,17 +112,30 @@ export default function ShapeView({ shape, zoom, onSelect, onDragStart }: ShapeV
             strokeWidth={1.5}
             vectorEffect="non-scaling-stroke"
           />
-          {selectionHandles(shape).map((point, index) => (
+          {selectionHandles(shape).map(({ x, y, handle }) => (
             <rect
-              key={index}
-              x={point.x - handleSize / 2}
-              y={point.y - handleSize / 2}
+              key={handle}
+              x={x - handleSize / 2}
+              y={y - handleSize / 2}
               width={handleSize}
               height={handleSize}
               fill="#ffffff"
               stroke={SELECTION_COLOR}
               strokeWidth={1.5}
               vectorEffect="non-scaling-stroke"
+              // Атрибут на <g> наследуется всем детям как none; маркер —
+              // исключение: перезаписывает наследство, чтобы быть кликабельным.
+              pointerEvents={onResizeStart ? 'all' : undefined}
+              onPointerDown={
+                onResizeStart
+                  ? (event) => {
+                      // Иначе событие всплывёт к <svg> и одновременно начнёт
+                      // перетаскивание фигуры (onDragStart) — ресайза не будет.
+                      event.stopPropagation();
+                      onResizeStart(event, handle);
+                    }
+                  : undefined
+              }
             />
           ))}
         </g>
