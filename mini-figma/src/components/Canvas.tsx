@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { Point, Shape, Viewport } from '../types/shape';
 import { screenToWorld } from '../utils/geometry';
+import type { ResizeHandle, ResizeModifiers } from '../utils/geometry';
 import ShapeView from './Shape';
 
 interface CanvasProps {
@@ -28,6 +29,10 @@ interface CanvasProps {
   onStartMove: (id: string, point: Point) => void;
   onUpdateMove: (point: Point) => void;
   onEndMove: () => void;
+  /** Ресайз за маркер рамки выделения: точки — в мировых координатах. */
+  onStartResize: (id: string, handle: ResizeHandle, point: Point) => void;
+  onUpdateResize: (point: Point, modifiers: ResizeModifiers) => void;
+  onEndResize: () => void;
 }
 
 /** Размер ячейки сетки в мировых единицах. */
@@ -63,6 +68,9 @@ export default function Canvas({
   onStartMove,
   onUpdateMove,
   onEndMove,
+  onStartResize,
+  onUpdateResize,
+  onEndResize,
 }: CanvasProps) {
   const rootRef = useRef<HTMLDivElement>(null);
   const [cursorWorld, setCursorWorld] = useState({ x: 0, y: 0 });
@@ -88,6 +96,13 @@ export default function Canvas({
     // приходят на неё и всплывают к контейнеру Canvas.
     event.currentTarget.setPointerCapture(event.pointerId);
     onStartMove(shape.id, screenToWorld(event.clientX, event.clientY, viewport));
+  };
+
+  const handleShapeResizeStart = (event: ReactPointerEvent<SVGElement>, shape: Shape, handle: ResizeHandle) => {
+    // Захват указателя на маркере (stopPropagation уже сделан в Shape.tsx):
+    // события движения/отпускания всплывают к контейнеру Canvas.
+    event.currentTarget.setPointerCapture(event.pointerId);
+    onStartResize(shape.id, handle, screenToWorld(event.clientX, event.clientY, viewport));
   };
 
   const handlePointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -117,6 +132,9 @@ export default function Canvas({
       onUpdateMove(world);
     } else if (draft) {
       onUpdateDraw(world);
+    } else {
+      // Ресайз (no-op, если жест не идёт): Shift/Alt читаем на каждом событии.
+      onUpdateResize(world, { aspect: event.shiftKey, fromCenter: event.altKey });
     }
   };
 
@@ -130,6 +148,7 @@ export default function Canvas({
     if (movingId) {
       onEndMove();
     }
+    onEndResize(); // no-op, если ресайз не начинался
     onEndPan();
   };
 
@@ -175,6 +194,11 @@ export default function Canvas({
             onSelect={shapesInteractive ? () => onSelect(shape.id) : undefined}
             onDragStart={
               shapesInteractive ? (event) => handleShapeDragStart(event, shape) : undefined
+            }
+            onResizeStart={
+              shapesInteractive
+                ? (event, handle) => handleShapeResizeStart(event, shape, handle)
+                : undefined
             }
           />
         ))}

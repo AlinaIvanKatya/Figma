@@ -32,6 +32,9 @@ export default function App() {
     startMove,
     updateMove,
     endMove,
+    startResize,
+    updateResize,
+    endResize,
     undo,
     redo,
   } = useShapes(tool);
@@ -68,6 +71,9 @@ export default function App() {
         onStartMove={startMove}
         onUpdateMove={updateMove}
         onEndMove={endMove}
+        onStartResize={startResize}
+        onUpdateResize={updateResize}
+        onEndResize={endResize}
       />
 
       <Toolbar activeTool={tool} onSelectTool={setTool} />
